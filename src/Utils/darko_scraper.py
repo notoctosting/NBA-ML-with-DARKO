@@ -1,3 +1,4 @@
+# src/Utils/darko_scraper.py
 
 import time
 import csv
@@ -8,159 +9,303 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-
-import pandas as pd
-from colorama import Fore, Style, init
+from selenium.common.exceptions import StaleElementReferenceException
+import os
+import datetime
 
 def scrape_daily_player_projections_by_team(teams, output_csv="daily_projections.csv"):
     """
-    Uses Selenium to:
-      - Open the DARKO site
-      - Click "Daily Player Per-Game Projections"
-      - Increase "Show entries" to 100 (optional)
-      - Filter by each team name in the global search box
-      - Scrape the resulting rows into a CSV.
-
-    Returns the path to the CSV for further processing.
+    (Unchanged) Old working code for Daily Player Per-Game Projections
+    that filters each `team` in the global search box.
     """
-
-    # 1) Set up Selenium (Chrome) with webdriver_manager
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service)
-    wait = WebDriverWait(driver, 20)  # up to 20s wait for elements
+    wait = WebDriverWait(driver, 20)
 
     try:
-        # 2) Navigate to the main DARKO page
         url = "https://apanalytics.shinyapps.io/DARKO/"
         driver.get(url)
 
-        # 3) Click the "Daily Player Per-Game Projections" tab
+        # Click the "Daily Player Per-Game Projections" tab
         daily_tab = wait.until(
             EC.element_to_be_clickable((By.LINK_TEXT, "Daily Player Per-Game Projections"))
         )
         daily_tab.click()
 
-        # 4) Wait for the table to appear
-        table_elem = wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "table.dataTable"))
-        )
-        time.sleep(2)  # small pause so data fully loads
+        # Wait for the table
+        table_elem = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.dataTable")))
+        time.sleep(2)
 
-        # 5) (Optional) Increase "Show entries" to 100 to reduce pagination
-        #    May fail if table ID changes. Adjust if needed or skip if happy with 30 rows.
+        # Show 100 if possible
         try:
-            show_entries_select = Select(driver.find_element(
-                By.CSS_SELECTOR, "select[name='DataTables_Table_0_length']"
-            ))
+            show_entries_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name='DataTables_Table_0_length']"))
             show_entries_select.select_by_visible_text("100")
-            time.sleep(2)  # wait for table to reload
+            time.sleep(2)
         except:
-            print("Warning: Could not find 'Show entries' dropdown. Possibly a different table ID?")
+            print("Warning: Could not find 'Show entries' dropdown on Daily tab.")
 
-        # 6) Grab column headers once (for the CSV)
+        # Grab headers
         header_cells = table_elem.find_elements(By.CSS_SELECTOR, "thead tr th")
         headers = [hc.text.strip() for hc in header_cells]
-        # We'll prepend a "SearchTeam" column to indicate which team was typed in the search box
         final_headers = ["SearchTeam"] + headers
 
-        # 7) Overwrite the CSV with a fresh header row
+        # Overwrite CSV
         with open(output_csv, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(final_headers)
 
-        # 8) For each team in `teams`, filter & scrape
+        # Filter each team name
         for team in teams:
-            # print(f"\nFiltering by team name: '{team}'")
-
-            # 8a) Find the global search box (in dataTables_filter)
-            #     Typically has `aria-controls="DataTables_Table_0"`.
-            search_input = driver.find_element(
-                By.CSS_SELECTOR, "div#DataTables_Table_0_filter input[type='search']"
-            )
-
-            # 8b) Clear, then type the team name
+            search_input = driver.find_element(By.CSS_SELECTOR, "div#DataTables_Table_0_filter input[type='search']")
             search_input.clear()
             search_input.send_keys(team)
-
-            # 8c) Wait a bit for DataTables to refresh
             time.sleep(2)
 
-            # 8d) Re-locate table rows
             table_elem = driver.find_element(By.CSS_SELECTOR, "table.dataTable")
             rows = table_elem.find_elements(By.CSS_SELECTOR, "tbody tr")
 
-            # 8e) Build a list of row values
             rows_data = []
             for row in rows:
                 cells = row.find_elements(By.TAG_NAME, "td")
-                row_values = [c.text.strip() for c in cells]
-                # Omit empty or "No matching records found"
-                if any(row_values) and "No matching records" not in row_values[0]:
-                    rows_data.append(row_values)
+                row_vals = [c.text.strip() for c in cells]
+                if any(row_vals) and "No matching records" not in row_vals[0]:
+                    rows_data.append(row_vals)
 
-            # 8f) Append them to our CSV
+            # Append to CSV
             with open(output_csv, "a", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                for row_vals in rows_data:
-                    writer.writerow([team] + row_vals)
-
-            # print(f"  --> Found {len(rows_data)} rows for '{team}'")
+                for rv in rows_data:
+                    writer.writerow([team] + rv)
 
         return output_csv
 
     finally:
-        # 9) Close the browser
         driver.quit()
 
 
-def analyze_scraped_data(csv_path, today_matches):
+def scrape_lineup_projections_by_team(teams, output_csv="lineup_projections.csv"):
     """
-    Loads the scraped CSV (with 'SearchTeam' and other columns) into pandas,
-    does a simple grouping on total PTS by team, and prints color-highlighted
-    results to console. 
+    Same logic as daily, but for "Lineup Projections" tab.
+    We open the tab, set "Show 50/100" if possible, then for each `team` in `teams`,
+    type that name in the global search, gather all rows, append to CSV with "SearchTeam" col.
     """
-    # print("\n--- Performing Basic Analysis on Scraped Data ---")
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service)
+    wait = WebDriverWait(driver, 20)
 
-    # 1) Load into a DataFrame
-    df = pd.read_csv(csv_path)
+    try:
+        url = "https://apanalytics.shinyapps.io/DARKO/"
+        driver.get(url)
 
-    # 2) Because headers can vary or sometimes be empty strings, let's find
-    #    the exact column name that contains "PTS." 
-    #    If we trust it's exactly "PTS," we can skip this. 
-    #    Otherwise, do a quick "fuzzy" match:
-    pts_col = None
-    for col in df.columns:
-        if "PTS" in col.upper():
-            pts_col = col
-            break
-    if not pts_col:
-        print("Could not find a 'PTS' column. Check the scraped headers!")
-        print("Available columns:", df.columns.tolist())
-        return
+        # Click "Lineup Projections"
+        lineup_tab = wait.until(
+            EC.element_to_be_clickable((By.LINK_TEXT, "Lineup Projections"))
+        )
+        lineup_tab.click()
 
-    # 3) Convert that column to numeric (in case it's strings)
-    df[pts_col] = pd.to_numeric(df[pts_col], errors='coerce')
+        # Wait for table
+        table_elem = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table.dataTable")))
+        time.sleep(2)
 
-    # 4) Group by 'SearchTeam' and sum the PTS
-    group = df.groupby("SearchTeam")[pts_col].sum().reset_index()
-    group.columns = ["Team", "Total_PTS"]
+        # Attempt "Show 50" or "Show 100"
+        try:
+            show_entries_select = Select(driver.find_element(By.CSS_SELECTOR, "select[name='DataTables_Table_0_length']"))
+            # We can pick 20, 50, or 100 if available
+            show_entries_select.select_by_visible_text("50")
+            time.sleep(2)
+        except:
+            print("Warning: Could not find 'Show entries' dropdown on Lineup tab.")
 
-    # 5) Highlight the highest total PTS by printing it in green (console)
-    max_pts = group["Total_PTS"].max()
-    init(autoreset=True)  # colorama init
+        # Grab headers
+        header_cells = table_elem.find_elements(By.CSS_SELECTOR, "thead tr th")
+        headers = [hc.text.strip() for hc in header_cells]
+        final_headers = ["SearchTeam"] + headers
+
+        # Overwrite CSV
+        with open(output_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(final_headers)
+
+        # For each team, type in global search
+        for team in teams:
+            search_input = driver.find_element(By.CSS_SELECTOR, "div#DataTables_Table_0_filter input[type='search']")
+            search_input.clear()
+            search_input.send_keys(team)
+            time.sleep(2)
+
+            # Re-locate rows
+            table_elem = driver.find_element(By.CSS_SELECTOR, "table.dataTable")
+            rows = table_elem.find_elements(By.CSS_SELECTOR, "tbody tr")
+
+            rows_data = []
+            for row in rows:
+                cells = row.find_elements(By.TAG_NAME, "td")
+                row_vals = [c.text.strip() for c in cells]
+                if any(row_vals) and "No matching records" not in row_vals[0]:
+                    rows_data.append(row_vals)
+
+            # Append to CSV
+            with open(output_csv, "a", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                for rv in rows_data:
+                    writer.writerow([team] + rv)
+
+        return output_csv
+
+    finally:
+        driver.quit()
 
 
-    # format for teams playing eachother today and the projected points 
-    print("\n --- Teams Playing Each Other Today ---")
-    for match in today_matches:
-        team1 = match[0]
-        team2 = match[1]
-        team1_pts = group.loc[group["Team"] == team1, "Total_PTS"].values[0]
-        team2_pts = group.loc[group["Team"] == team2, "Total_PTS"].values[0]
+def scrape_current_player_skill_by_team(teams, output_csv="current_skill.csv"):
+    """
+    Filters each team name on the 'Current Player Skill Projections' tab and appends rows to a CSV.
+    Handles the StaleElementReferenceException by re-locating the table rows 
+    after the DataTables processing is complete.
+    """
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service)
+    wait = WebDriverWait(driver, 20)
 
-        if team1_pts > team2_pts:
-            print(f"{Fore.GREEN}{team1:<20}{Style.RESET_ALL} {team1_pts:.1f} vs {Fore.RED}{team2:<20}{Style.RESET_ALL} {team2_pts:.1f}")
-        else:
-            print(f"{Fore.RED}{team1:<20}{Style.RESET_ALL} {team1_pts:.1f} vs {Fore.GREEN}{team2:<20}{Style.RESET_ALL} {team2_pts:.1f}")
+    try:
+        url = "https://apanalytics.shinyapps.io/DARKO/"
+        driver.get(url)
 
-        
+        # 1) Click the 'Current Player Skill Projections' tab
+        skill_tab = wait.until(
+            EC.element_to_be_clickable((By.LINK_TEXT, "Current Player Skill Projections"))
+        )
+        skill_tab.click()
+
+        # 2) Wait for table
+        table_elem = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "table.dataTable"))
+        )
+        time.sleep(2)
+
+        # 3) (Optional) Attempt 'Show 50' or 'Show 100'
+        try:
+            show_entries_select = Select(driver.find_element(
+                By.CSS_SELECTOR, 
+                "select[name='DataTables_Table_0_length']"
+            ))
+            show_entries_select.select_by_visible_text("50")
+            time.sleep(2)
+        except:
+            print("Warning: Could not find 'Show entries' dropdown on Skill tab.")
+
+        # 4) Grab table headers
+        header_cells = table_elem.find_elements(By.CSS_SELECTOR, "thead tr th")
+        headers = [hc.text.strip() for hc in header_cells]
+        final_headers = ["SearchTeam"] + headers
+
+        # 5) Overwrite the CSV with a fresh header row
+        with open(output_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(final_headers)
+
+        # 6) For each team, filter & scrape
+        for team in teams:
+            # a) Type in the search box
+            search_input = driver.find_element(
+                By.CSS_SELECTOR, 
+                "div#DataTables_Table_0_filter input[type='search']"
+            )
+            search_input.clear()
+            search_input.send_keys(team)
+            
+            # b) Wait for DataTables to finish processing
+            #    Typically there's a <div class="dataTables_processing" style="display: block;"> 
+            #    we wait until it's invisible
+            try:
+                wait.until(
+                    EC.invisibility_of_element_located(
+                        (By.CSS_SELECTOR, "div.dataTables_processing[style*='display: block']")
+                    )
+                )
+            except:
+                pass
+            
+            time.sleep(1)  # small extra pause for safety
+            
+            # c) Now re-locate table rows to avoid stale references
+            table_elem = driver.find_element(By.CSS_SELECTOR, "table.dataTable")
+            rows = table_elem.find_elements(By.CSS_SELECTOR, "tbody tr")
+
+            # d) Build a list of row values
+            rows_data = []
+            for row in rows:
+                # We'll do a try/except in case of partial staleness:
+                try:
+                    cells = row.find_elements(By.TAG_NAME, "td")
+                    row_vals = [c.text.strip() for c in cells]
+                    if any(row_vals) and "No matching records" not in row_vals[0]:
+                        rows_data.append(row_vals)
+                except StaleElementReferenceException:
+                    # If stale, we can re-locate cells
+                    # or skip
+                    continue
+
+            # e) Append them to CSV
+            with open(output_csv, "a", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                for rv in rows_data:
+                    writer.writerow([team] + rv)
+
+        return output_csv
+
+    finally:
+        driver.quit()
+
+
+def scrape_dark_data_for_date(teams, date_str=None, force_scrape=False, out_dir="darko_data"):
+    """
+    A 'wrapper' that checks if we have today's CSV for daily, lineup, skill.
+    If not, or if force_scrape=True, it calls the scraping functions.
+
+    :param teams: list of team names
+    :param date_str: e.g. '2025-01-27'. If None, use today's date
+    :param force_scrape: bool, if True, forcibly scrape again
+    :param out_dir: directory to store the CSV files
+    :return: a dict of { 'daily': daily_csv_path, 'lineup': lineup_csv_path, 'skill': skill_csv_path }
+    """
+
+    if not date_str:
+        date_str = datetime.date.today().strftime("%Y%m%d")
+
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    # We'll define the final CSV paths
+    daily_csv = os.path.join(out_dir, f"daily_projections_{date_str}.csv")
+    lineup_csv = os.path.join(out_dir, f"lineup_projections_{date_str}.csv")
+    skill_csv  = os.path.join(out_dir, f"current_skill_{date_str}.csv")
+
+    # Check if they exist
+    daily_exists = os.path.exists(daily_csv)
+    lineup_exists = os.path.exists(lineup_csv)
+    skill_exists = os.path.exists(skill_csv)
+
+    # If file exists and not force_scrape => skip scraping
+    if daily_exists and not force_scrape:
+        print(f"Daily CSV for {date_str} already exists: {daily_csv}")
+    else:
+        print(f"Scraping daily data for {date_str} => {daily_csv}")
+        scrape_daily_player_projections_by_team(teams, output_csv=daily_csv)
+
+    if lineup_exists and not force_scrape:
+        print(f"Lineup CSV for {date_str} already exists: {lineup_csv}")
+    else:
+        print(f"Scraping lineup data for {date_str} => {lineup_csv}")
+        scrape_lineup_projections_by_team(teams, output_csv=lineup_csv)
+
+    if skill_exists and not force_scrape:
+        print(f"Skill CSV for {date_str} already exists: {skill_csv}")
+    else:
+        print(f"Scraping skill data for {date_str} => {skill_csv}")
+        scrape_current_player_skill_by_team(teams, output_csv=skill_csv)
+
+    return {
+       "daily": daily_csv,
+       "lineup": lineup_csv,
+       "skill": skill_csv
+    }

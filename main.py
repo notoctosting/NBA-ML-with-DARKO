@@ -8,8 +8,20 @@ from colorama import Fore, Style
 from src.DataProviders.SbrOddsProvider import SbrOddsProvider
 from src.Predict import NN_Runner, XGBoost_Runner
 from src.Utils.Dictionaries import team_index_current
-from src.Utils.tools import create_todays_games_from_odds, get_json_data, to_data_frame, get_todays_games_json, create_todays_games
-from src.Utils.darko_scraper import scrape_daily_player_projections_by_team, analyze_scraped_data
+from src.Utils.tools import create_todays_games_from_odds, get_json_data, to_data_frame, get_todays_games_json, create_todays_games, build_darko_sums, load_skill_data, load_lineup_data
+from src.Utils.darko_scraper import (
+    scrape_daily_player_projections_by_team,
+    scrape_lineup_projections_by_team,
+    scrape_current_player_skill_by_team,
+    scrape_dark_data_for_date
+)
+
+from src.Utils.darko_metrics import load_skill_data, load_lineup_data, load_daily_data, compute_weighted_dpm, compute_off_def_splits, compute_momentum_score, build_team_metrics
+from src.Utils.darko_analyzer import deep_dark_analysis
+# Optional advanced
+from src.Utils.simulate_injury import simulate_lineups
+from src.Utils.monte_carlo import simulate_monte_carlo
+import numpy as np
 todays_games_url = 'https://data.nba.com/data/10s/v2015/json/mobile_teams/nba/2024/scores/00_todays_scores.json'
 data_url = 'https://stats.nba.com/stats/leaguedashteamstats?' \
            'Conference=&DateFrom=&DateTo=&Division=&GameScope=&' \
@@ -87,18 +99,9 @@ def createTodaysGames(games, df, odds):
 
 def main():
     odds = None
-    # today_matches = [
-    #     ["Mavericks", "Hornets"],
-    #     ["Pistons", "Rockets"],
-    #     ["Timberwolves", "Grizzlies"],
-    #     ["Hawks", "Knicks"],
-    #     ["Suns", "Cavaliers"],
-    #     ["Celtics", "Warriors"],
-    #     ["Jazz", "Pelicans"],
-    #     ["Bulls", "Clippers"]
-    # ]
-
     today_matches = []
+    teams_list = []
+    xgb_dict = {}
 
 
     if args.odds:
@@ -118,6 +121,7 @@ def main():
                 home_team, away_team = g.split(":")
                 print(f"{away_team} ({odds[g][away_team]['money_line_odds']}) @ {home_team} ({odds[g][home_team]['money_line_odds']})")
                 today_matches.append([home_team, away_team])
+
      
     else:
         data = get_todays_games_json(todays_games_url)
@@ -132,7 +136,7 @@ def main():
         print("-------------------------------------------------------")
     if args.xgb:
         print("---------------XGBoost Model Predictions---------------")
-        XGBoost_Runner.xgb_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team_odds, args.kc)
+        xgb_dict =XGBoost_Runner.xgb_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team_odds, args.kc)
         print("-------------------------------------------------------")
     if args.A:
         print("---------------XGBoost Model Predictions---------------")
@@ -143,16 +147,34 @@ def main():
         NN_Runner.nn_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team_odds, args.kc)
         print("-------------------------------------------------------")
     if args.darko:
-        print("---------- Daily Adjusted and Regressed Kalman Optimized projections | DARKO ----------")
-        my_teams = [match[0] for match in today_matches] + [match[1] for match in today_matches]
-        csv_file = scrape_daily_player_projections_by_team(my_teams, "daily_projections.csv")
-        analyze_scraped_data(csv_file, today_matches)
-        print("--------------------------------------------------------------")
+        print("Daily Adjusted & Regressed Kalman Optimized - DARKO")
+        all_teams = [match[0] for match in today_matches] + [match[1] for match in today_matches]
+        darko_csv_paths = scrape_dark_data_for_date(
+            teams=all_teams,
+            date_str=None,         
+            force_scrape=args.force_dark,
+            out_dir="darko_data"
+        )
+        daily_csv  = darko_csv_paths["daily"]
+        lineup_csv = darko_csv_paths["lineup"]
+        skill_csv  = darko_csv_paths["skill"]
+        darko_sums = build_darko_sums(daily_csv, today_matches)
+        df_skill = load_skill_data(skill_csv)
+        df_lineup = load_lineup_data(lineup_csv)
+        team_metrics = build_team_metrics(all_teams, df_skill, df_lineup)
+        deep_dark_analysis(
+            today_matches,
+            xgb_dict,        # from xgb_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team_odds, kelly_criterion)
+            darko_sums,      # from build_darko_sums(daily_csv, matches)
+            team_metrics     # from build_team_metrics
+        )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Model to Run')
     parser.add_argument('-xgb', action='store_true', help='Run with XGBoost Model')
     parser.add_argument('-darko', action='store_true', help='Run with DARKO Model')
+    parser.add_argument('-force_dark', action='store_true', help='Force re-scrape of DARKO data even if it exists')
     parser.add_argument('-nn', action='store_true', help='Run with Neural Network Model')
     parser.add_argument('-A', action='store_true', help='Run all Models')
     parser.add_argument('-odds', help='Sportsbook to fetch from. (fanduel, draftkings, betmgm, pointsbet, caesars, wynn, bet_rivers_ny')

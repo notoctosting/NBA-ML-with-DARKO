@@ -77,3 +77,44 @@ def get_date(date_string):
     year1, month, day = re.search(r'(\d+)-\d+-(\d\d)(\d\d)', date_string).groups()
     year = year1 if int(month) > 8 else int(year1) + 1
     return datetime.strptime(f"{year}-{month}-{day}", '%Y-%m-%d')
+
+
+
+
+
+def build_darko_sums(daily_csv, today_matches):
+    """
+    Reads daily_projections.csv, sums the PTS column by team,
+    then returns a dict keyed by (home, away) => (darko_home_pts, darko_away_pts).
+    """
+    df = pd.read_csv(daily_csv)
+    # find PTS column
+    pts_col = None
+    for c in df.columns:
+        if "PTS" in c.upper():
+            pts_col = c
+            break
+    if not pts_col:
+        raise ValueError("Could not find PTS column in daily CSV.")
+    df[pts_col] = pd.to_numeric(df[pts_col], errors="coerce")
+
+    sums_by_team = df.groupby("SearchTeam")[pts_col].sum().to_dict()
+
+    out = {}
+    for (home, away) in today_matches:
+        home_pts = sums_by_team.get(home, 0.0)
+        away_pts = sums_by_team.get(away, 0.0)
+        out[(home, away)] = (home_pts, away_pts)
+    return out
+
+def load_skill_data(skill_csv):
+    df_skill = pd.read_csv(skill_csv)
+    if "DPM" in df_skill.columns:
+        df_skill["DPM"] = pd.to_numeric(df_skill["DPM"], errors="coerce")
+    return df_skill
+
+def load_lineup_data(lineup_csv):
+    df_lineup = pd.read_csv(lineup_csv)
+    if "Net" in df_lineup.columns:
+        df_lineup["Net"] = pd.to_numeric(df_lineup["Net"], errors="coerce")
+    return df_lineup
