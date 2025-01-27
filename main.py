@@ -149,6 +149,7 @@ def main():
     if args.darko:
         print("Daily Adjusted & Regressed Kalman Optimized - DARKO")
         all_teams = [match[0] for match in today_matches] + [match[1] for match in today_matches]
+        odds_data = odds
         darko_csv_paths = scrape_dark_data_for_date(
             teams=all_teams,
             date_str=None,         
@@ -166,7 +167,8 @@ def main():
             today_matches,
             xgb_dict,        # from xgb_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team_odds, kelly_criterion)
             darko_sums,      # from build_darko_sums(daily_csv, matches)
-            team_metrics     # from build_team_metrics
+            team_metrics,     # from build_team_metrics
+            odds_data=odds_data
         )
 
 

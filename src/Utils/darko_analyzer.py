@@ -8,7 +8,8 @@ def deep_dark_analysis(
     xgb_out,       # e.g. { (home, away): {...} }
     darko_sums,    # e.g. { (home, away): (dh, da) }
     team_metrics,  # e.g. { team: { "weighted_dpm":..., "off_split":..., ... } }
-    dpm_threshold=1.0
+    dpm_threshold=1.0,
+    odds_data=None
 ):
     """
     A synergy display that:
@@ -47,10 +48,21 @@ def deep_dark_analysis(
         home_m = team_metrics.get(home, {})
         away_m = team_metrics.get(away, {})
 
+        # Get odds if available
+        odds_str = ""
+        if odds_data and f"{home}:{away}" in odds_data:
+            game_odds = odds_data[f"{home}:{away}"]
+            home_ml = game_odds[home]["money_line_odds"]
+            away_ml = game_odds[away]["money_line_odds"]
+            total = game_odds["under_over_odds"]
+            odds_str = f" (ML: {away} {away_ml:>4} @ {home} {home_ml:>4}, O/U: {total})"
+
         # Build an ASCII block
         print(f"\n{'-'*65}")
-        match_title = f"[{away}] @ [{home}]"
+        match_title = f"[{away}] @ [{home}]{odds_str}"
+        match_title = f"[{away} {away_ml:>4}] @ [{home} {home_ml:>4}]"
         print(f"| {Fore.YELLOW}{match_title:<61}{Style.RESET_ALL}|")
+        
         print(f"{'-'*65}")
         # line 1: XGB side & EV
         # color EV
