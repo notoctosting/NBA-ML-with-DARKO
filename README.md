@@ -44,8 +44,8 @@ Make sure all are in your `requirements.txt`.
 
 1. **Clone & Install**  
    ```
-   git clone https://github.com/kyleskom/NBA-Machine-Learning-Sports-Betting.git
-   cd NBA-Machine-Learning-Sports-Betting
+   git clone https://github.com/notoctosting/NBA-ML-with-DARKO.git
+   cd NBA-ML-with-DARKO
    pip3 install -r requirements.txt
    ```
 
@@ -100,17 +100,6 @@ python3 main.py -xgb -odds=betmgm -darko -force_dark
 
 ---
 
-## Flask Web App
-
-The project optionally includes a **Flask** application to view the data in your browser.
-
-```
-cd Flask
-flask --debug run
-```
-Then open `http://127.0.0.1:5000`.
-
----
 
 ## Getting New Data & Training Models
 
@@ -128,7 +117,3 @@ python -m XGBoost_Model_UO
 ```
 
 ---
-
-## Contributing
-
-All contributions are welcome. If you have suggestions for better synergy logic, new advanced metrics from Darko, or improvements in scraping/caching, feel free to open a PR or issue.
