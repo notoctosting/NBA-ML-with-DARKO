@@ -44,7 +44,7 @@ Python 3.11 is recommended.
 1. **Clone** the repo and **install** dependencies:
 
 ```
-git clone https://github.com/YOUR-REPO/NBA-ML-with-DARKO.git
+git clone https://github.com/notoctosting/NBA-ML-with-DARKO.git
 cd NBA-ML-with-DARKO
 pip3 install -r requirements.txt
 ```
