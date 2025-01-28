@@ -57,12 +57,20 @@ def deep_dark_analysis(
         xgb_text = f"XGB Pick: {xgb_side.upper()} (Home: {home_prob*100:.1f}%, Away: {away_prob*100:.1f}%)"
         print(f"|{xgb_text:^78}|")
 
+        # Darko daily sums
+        darko_text = f"Darko: {darko_side.upper()} (Home: {dh}, Away: {da})"
+        print(f"|{darko_text:^78}|")
+
         # Synergy lines (centered)
         ml_synergy = xgb_side == darko_side
         ml_color = Fore.GREEN if ml_synergy else Fore.RED
         ml_msg = "AGREE" if ml_synergy else "DISAGREE"
         ml_text = f"ML Synergy: {ml_color}{ml_msg:^8}{Style.RESET_ALL}"
         print(f"|{ml_text:^78}|")
+
+        # metric to show that the underdog is the side with positive EV and if darko and xgb agree on the underdog to the same degree - may need some calculations
+
+
 
         # EV line (centered with colors)
         ev_text = f"EV: {home} ({Fore.GREEN if ev_home > 0 else Fore.RED}{ev_home:>6.2f}{Style.RESET_ALL}) | " \
@@ -89,7 +97,7 @@ def deep_dark_analysis(
             def_val = metrics.get("def_split", 0)
             lineup = metrics.get("lineup_strength", 0)
             
-            metrics_text = f"{team:.<25} DPM: {dpm:>6.2f} | OFF: {off:>6.2f} | DEF: {def_val:>6.2f} | NET: {lineup:>6.2f}"
+            metrics_text = f"{team:.<25} DPM: {dpm:>6.2f} | Off: {off:>6.2f} | Def: {def_val:>6.2f} | BestLU: {lineup:>6.2f}"
             print(f"|{metrics_text:^78}|")
 
         print(f"{separator}\n")
