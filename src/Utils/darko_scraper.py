@@ -257,7 +257,7 @@ def scrape_current_player_skill_by_team(teams, output_csv="current_skill.csv"):
         driver.quit()
 
 
-def scrape_dark_data_for_date(teams, date_str=None, force_scrape=False, out_dir="darko_data"):
+def scrape_dark_data_for_date(teams, date_str=None, force_scrape=False, out_dir="Data/darko"):
     """
     A 'wrapper' that checks if we have today's CSV for daily, lineup, skill.
     If not, or if force_scrape=True, it calls the scraping functions.
@@ -265,13 +265,16 @@ def scrape_dark_data_for_date(teams, date_str=None, force_scrape=False, out_dir=
     :param teams: list of team names
     :param date_str: e.g. '2025-01-27'. If None, use today's date
     :param force_scrape: bool, if True, forcibly scrape again
-    :param out_dir: directory to store the CSV files
+    :param out_dir: directory to store the CSV files (now defaults to Data/darko)
     :return: a dict of { 'daily': daily_csv_path, 'lineup': lineup_csv_path, 'skill': skill_csv_path }
     """
 
     if not date_str:
         date_str = datetime.date.today().strftime("%Y%m%d")
 
+    # Create both Data and Data/darko directories if they don't exist
+    if not os.path.exists("Data"):
+        os.makedirs("Data")
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 

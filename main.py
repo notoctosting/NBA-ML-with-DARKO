@@ -154,7 +154,7 @@ def main():
             teams=all_teams,
             date_str=None,         
             force_scrape=args.force_dark,
-            out_dir="darko_data"
+            out_dir="Data/darko"
         )
         daily_csv  = darko_csv_paths["daily"]
         lineup_csv = darko_csv_paths["lineup"]
@@ -165,10 +165,11 @@ def main():
         team_metrics = build_team_metrics(all_teams, df_skill, df_lineup)
         deep_dark_analysis(
             today_matches,
-            xgb_dict,        # from xgb_runner(data, todays_games_uo, frame_ml, games, home_team_odds, away_team_odds, kelly_criterion)
-            darko_sums,      # from build_darko_sums(daily_csv, matches)
-            team_metrics,     # from build_team_metrics
-            odds_data=odds_data
+            xgb_dict,        
+            darko_sums,      
+            team_metrics,     
+            odds_data=odds_data,
+            kelly_criterion=args.kc  # Pass the kelly_criterion flag
         )
 
 
