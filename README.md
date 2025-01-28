@@ -1,7 +1,3 @@
-**README: NBA Machine Learning Sports Betting with DARKO Integration**  
-
----
-
 # NBA Sports Betting Using Machine Learning 🏀  
 
 A machine learning AI to predict NBA game outcomes—**money lines** (winners) and **over/unders**—integrating **XGBoost** models with daily-scraped **DARKO** data. Builds off an original project by [kyleskom](https://github.com/kyleskom/NBA-Machine-Learning-Sports-Betting), expanded to include deeper synergy logic, advanced metrics (Weighted DPM, Off/Def splits, best lineups), and daily caching of scraped data.
